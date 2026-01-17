@@ -1,4 +1,3 @@
-
 $qBittorrentURL  = "http://localhost:8080"
 $qBittorrentUser = "admin"
 $PasswordFilePath = "$env:LOCALAPPDATA\qBittorrentPassword.txt"
@@ -69,13 +68,18 @@ function Set-QbitPort {
     try {
         Invoke-RestMethod -Uri "$Url/api/v2/app/setPreferences" -Method Post -WebSession $Session -Body @{ json = $json } -ErrorAction Stop | Out-Null
         Write-Host "SUCCESS: qBittorrent port updated to $Port" -ForegroundColor Green
+        return $true
     }
-    catch { Write-Error "Failed to set port." }
+    catch { Write-Error "Failed to set port."
+            return $false 
+    }
 }
 
 
 # Check if qBittorrent is running
-if (-not (Get-Process -Name 'qbittorrent' -ErrorAction SilentlyContinue)) {
+$qProcess = Get-Process -Name 'qbittorrent' -ErrorAction SilentlyContinue | Select-Object -First 1
+
+if (-not $qProcess) {
     Write-Host "qBittorrent is not running. Exiting." -ForegroundColor Yellow
     exit
 }
@@ -103,5 +107,30 @@ if ($currentPort -eq $protonPort) {
 }
 else {
     Write-Host "Mismatch! Proton: $protonPort | qBit: $currentPort" -ForegroundColor Yellow
-    Set-QbitPort -Url $qBittorrentURL -Session $qbitSession -Port $protonPort
+    
+    # Update qBittorrent port
+    $updateSuccess = Set-QbitPort -Url $qBittorrentURL -Session $qbitSession -Port $protonPort
+    
+    if ($updateSuccess) {
+        # Restart app (fixes torrents getting stalled bug)
+        Write-Host "Restarting qBittorrent to apply changes..." -ForegroundColor Magenta
+        
+        # Capture the executable path before we kill the process
+        $exePath = $qProcess.Path
+        
+        # Stop process
+        Stop-Process -Id $qProcess.Id -Force
+        
+        # Wait 5 seconds for file locks to release
+        Start-Sleep -Seconds 5
+        
+        # Start the process again
+        if ($exePath -and (Test-Path $exePath)) {
+            Start-Process -FilePath $exePath
+            Write-Host "qBittorrent restarted successfully." -ForegroundColor Green
+        }
+        else {
+            Write-Error "Could not find qBittorrent executable at '$exePath' to restart it. Please start it manually."
+        }
+    }
 }
