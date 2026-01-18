@@ -8,3 +8,5 @@ Program/script: powershell.exe
 Add arguments: -ExecutionPolicy Bypass -WindowStyle Hidden -File "C:\update_qbit_port.ps1"  
 
 Remember to enable WebUI in qBittorrent and modify the username and password file path in this script.
+
+Credit to [@idwpan](https://gist.github.com/idwpan) for the original code.
